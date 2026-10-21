@@ -168,6 +168,9 @@
     return best;
   }
 
+  /** 'Spotify - Music and Podcasts' -> 'Spotify', 'Tubi: Free Movies & TV' -> 'Tubi'. */
+  function shortName(title) { return title.split(/\s+[-\u2013\u2014|]\s+|:\s+/)[0]; }
+
   function build() {
     tilesEl.innerHTML = '';
     var ordered = orderedApps();
@@ -183,15 +186,19 @@
       el.className = 'item';
       var card = document.createElement('div');
       card.className = 'card';
-      var img = document.createElement('img');
+      // Shown as a background: webOS 22 ignores border-radius on <img>. The Image samples colours.
+      var icon = document.createElement('div');
+      icon.className = 'icon';
+      icon.style.backgroundImage = 'url("' + app.icon + '")';
+      card.appendChild(icon);
+      var img = new Image();
       var item = { app: app, el: el, card: card, color: null };
       img.onload = function () { paintTile(item, img); };
       img.src = app.icon;
-      card.appendChild(img);
       el.appendChild(card);
       var name = document.createElement('div');
       name.className = 'name';
-      name.textContent = app.title;
+      name.textContent = shortName(app.title);
       card.appendChild(name);
       el.addEventListener('mouseover', function () {
         if (zone !== 'inputs' && !editing) focusTile(items.indexOf(item));
@@ -605,6 +612,9 @@
   updateClock();
   setInterval(updateClock, 10000);
   watchNetwork();
+  // Wakes the Home watcher (service/), which then keeps itself running and reopens this launcher
+  // whenever LG's home comes up.
+  luna('luna://com.gathin.tvhome.service/start', {});
   animateIn();
   zone = 'none';
   focusTile(0);

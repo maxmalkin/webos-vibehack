@@ -288,10 +288,11 @@ test('a dock name matches the start of a title, preferring the shortest; with no
   assert.deepEqual(rows(s)[0].map(t => t.title), ['Apple TV', 'Crunchyroll', 'Disney+', 'JioHotstar', 'Music']);
 });
 
-test('starts focused on the first dock app', async () => {
+test('starts focused on the first dock app, and wakes the Home watcher', async () => {
   reset();
   const s = await snap(await open());
   assert.equal(s.focused, 'Netflix');
+  assert.ok(s.calls.some(c => c.uri === 'luna://com.gathin.tvhome.service/start'), 'Home watcher started');
   assert.ok(s.glass);
   assert.equal(s.pill, null);
   assert.deepEqual(launches(s), []);
@@ -312,6 +313,17 @@ test('every tile shows its app name', async () => {
   reset();
   const s = await snap(await open());
   for (const t of s.tiles) assert.ok(t.nameShown, `${t.title} labelled`);
+});
+
+test('long store names are cut to the app name', async () => {
+  reset();
+  fixture.apps.push(['tubi', 'Tubi: Free Movies & TV', { solid: '#5c0ce6' }],
+    ['spotify-beehive', 'Spotify - Music and Podcasts', { solid: '#1db954' }],
+    ['roomshare', 'Room to Room Share', { glyph: '#ffffff' }]);
+  const s = await snap(await open());
+  for (const name of ['Tubi', 'Room to Room Share']) assert.ok(s.titles.includes(name), name);
+  assert.equal(s.titles.filter(t => t === 'Spotify').length, 2);
+  assert.ok(!s.titles.some(t => t.includes(':') || t.includes(' - ')));
 });
 
 // ---- tile colours ----------------------------------------------------------------------------

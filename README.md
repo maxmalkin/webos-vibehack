@@ -5,7 +5,8 @@ An Apple TV-style home screen for LG TVs. It's a webOS port of the launcher from
 
 ![The launcher running on an LG OLED C6](docs/screenshot.jpg)
 
-Tested on an LG OLED C6 (OLED55C6XLA, webOS 26, firmware 43.21.79).
+Tested on an LG OLED C6 (OLED55C6XLA, webOS 26, firmware 43.21.79) and an LG UQ7070 (50UQ7070ZUE,
+webOS 22, firmware 04.60.90).
 
 ## What's different from Android
 
@@ -15,7 +16,7 @@ webOS is more locked down than Android TV, so three things work differently:
 |---|---|---|
 | Install | ADB, no account | LG's **Developer Mode** app (free LG developer account) |
 | App list | read on the TV | read from your computer by `sync-apps.py` and bundled in; webOS won't let an app list installed apps |
-| Home button | the launcher *is* Home | webOS always opens LG's home; `home-watch.py`, running on another device, switches straight back (about 0.1 s) |
+| Home button | the launcher *is* Home | webOS always opens LG's home; a watcher inside the launcher switches straight back |
 
 There's no debloat step: webOS has no ADB-style package disabling. Turn off LG's ads in the TV's
 own settings instead (see [Cleaning up LG's home](#cleaning-up-lgs-home)).
@@ -64,16 +65,22 @@ holding 1 opens the launcher from anywhere.
 
 ## The Home button
 
-webOS hard-wires Home to LG's home, and blocks Developer Mode apps from seeing which app is in front,
-so the TV can't redirect it on its own. [`home-watch.py`](home-watch.py) does it from another
-always-on device on the same network: it watches the TV's foreground app and, the moment LG's home
-appears, opens the launcher on top.
+webOS hard-wires Home to LG's home and hides which app is in front from Developer Mode apps. The
+TV's remote-control service (the one LG's phone app uses) does share it, and it answers on the TV
+itself. So the launcher brings a small watcher, [`service/`](service/), that runs on the TV,
+connects there, and opens the launcher the moment LG's home appears. No second device needed.
 
-- **Press Home twice** within three seconds to stay on LG's home, for its menus.
-- When the TV powers on to LG's home, it goes to the launcher too.
-- When the watcher isn't running, Home simply opens LG's home as usual.
+- The first time the launcher opens, the TV asks to allow a device: accept. It asks again after
+  each reinstall.
+- LG's home shows for a few seconds first: as long as the TV takes to open the launcher.
+- **Press Home again** within three seconds of the launcher coming back to stay on LG's home, for
+  its menus.
+- If Home stops coming back (after the TV restarts, say), open the launcher once with its number
+  key and the watcher starts again.
 
-On a Mac, install it as a background service that starts at login:
+Tested on the UQ7070 (webOS 22). If it doesn't work on your TV, [`home-watch.py`](home-watch.py)
+does the same job from another always-on device on the network. On a Mac, install it as a
+background service that starts at login:
 
 ```bash
 TV_HOST=192.168.1.50 ./home-watch-mac.sh       # install or update
@@ -142,7 +149,8 @@ For when you do land on it. Names vary a little by webOS version:
 | [`app/`](app/) | The launcher: `index.html`, `style.css`, `app.js`, `config.js`, `appinfo.json` |
 | [`install.sh`](install.sh) | Syncs your apps, packages and installs the launcher, and opens it |
 | [`sync-apps.py`](sync-apps.py) | Reads apps, icons and HDMI inputs from the TV into `app/apps.js` and `app/icons/` |
-| [`home-watch.py`](home-watch.py) | Sends the Home button to the launcher |
+| [`service/`](service/) | The Home watcher that runs on the TV with the launcher |
+| [`home-watch.py`](home-watch.py) | The same, from another device, for TVs where the watcher doesn't work |
 | [`home-watch-mac.sh`](home-watch-mac.sh) | Runs the watcher as a macOS background service |
 | [`lgtv.py`](lgtv.py) | Pairs with and talks to the TV's remote-control service |
 | [`preview.mjs`](preview.mjs) | Serves the launcher on your computer, with demo apps until you sync |

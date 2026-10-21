@@ -1,0 +1,5 @@
+{
+  "id": "com.gathin.tvhome.service",
+  "description": "Sends the Home button to the launcher",
+  "services": [{ "name": "com.gathin.tvhome.service", "description": "Home watcher" }]
+}

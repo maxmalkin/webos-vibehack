@@ -218,23 +218,24 @@ body.editing #glass { opacity: 0 !important; }
 }
 
 /* Store icons (a logo on a colour) show as a rounded app icon; LG's transparent glyphs bare. */
-.card img {
+.card .icon {
   position: absolute;
   left: 50%;
   top: calc(var(--tile-h) * 0.13);
   width: calc(var(--tile-h) * 0.46);
   height: calc(var(--tile-h) * 0.46);
   border-radius: 22%;
-  object-fit: cover;
+  background: center / cover no-repeat;
   transform: translateX(-50%);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
-.card.glyph img {
-  top: calc(var(--tile-h) * 0.16);
-  width: calc(var(--tile-h) * 0.4);
-  height: calc(var(--tile-h) * 0.4);
+.card.glyph .icon {
+  top: calc(var(--tile-h) * 0.08);
+  width: calc(var(--tile-h) * 0.58);
+  height: calc(var(--tile-h) * 0.58);
   border-radius: 0;
+  background-size: contain;
   box-shadow: none;
 }
 

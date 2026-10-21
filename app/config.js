@@ -3,7 +3,7 @@
 window.CONFIG = {
   // The dock on the home screen, in this order: app ids, or the start of an app's name ('peacock'
   // finds 'Peacock TV'). Missing apps are skipped. Every other app is in the grid below it.
-  dockApps: ['netflix', 'amazon', 'paramount', 'youtube.leanback.v4', 'peacock'],
+  dockApps: ['netflix', 'amazon', 'com.cbs-all-access.webapp.prod', 'youtube.leanback.v4', 'com.peacock.tv'],
 
   // Apps never shown as tiles (inputs and Live TV are already in the Inputs menu).
   hiddenApps: [
