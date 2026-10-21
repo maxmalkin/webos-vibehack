@@ -29,9 +29,12 @@ fi
 
 # The Home watcher (service/) runs on the TV beside the app; its one dependency is bundled in.
 (cd service && npm install --omit=dev --no-audit --no-fund --silent)
+# It reuses this computer's pairing (from sync-apps.py), so the TV doesn't ask again on every install.
+"$PY" -c "import json, sys; print(json.load(open('.lgtv-key.json'))[sys.argv[1]])" "$TV_HOST" > service/.ssap-key \
+  2>/dev/null || rm -f service/.ssap-key
 rm -rf build && mkdir build
 ares package app service -o build
 ares install -d "$DEVICE" build/${APP_ID}_*.ipk
 ares launch -d "$DEVICE" "$APP_ID"
-echo "Installed. If the TV asks to allow a device, accept: that is the Home watcher pairing."
+echo "Installed. If the TV asks to allow a device, accept: that is the Home watcher."
 echo "Hold a number key on the remote while the launcher is open to make it a one-press shortcut."

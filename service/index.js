@@ -11,13 +11,14 @@ var homeRedirect = require('./home');
 
 var LAUNCHER = 'com.gathin.tvhome', LG_HOME = 'com.webos.app.home', ESCAPE_MS = 3000;
 var TV = 'wss://127.0.0.1:3001';
-var KEY_FILE = __dirname + '/.ssap-key';   // the pairing; a reinstall asks again
-// The set tested on a webOS 22 TV.
+var KEY_FILE = __dirname + '/.ssap-key';   // the pairing: install.sh brings the computer's, else the TV asks
+// Same as lgtv.py, so the pairing install.sh hands over from the computer still fits.
 var PERMISSIONS = ['LAUNCH', 'LAUNCH_WEBAPP', 'APP_TO_APP', 'CLOSE', 'TEST_OPEN', 'TEST_PROTECTED', 'CONTROL_AUDIO',
   'CONTROL_DISPLAY', 'CONTROL_INPUT_JOYSTICK', 'CONTROL_INPUT_MEDIA_RECORDING', 'CONTROL_INPUT_MEDIA_PLAYBACK',
-  'CONTROL_INPUT_TV', 'CONTROL_POWER', 'READ_APP_STATUS', 'READ_CURRENT_CHANNEL', 'READ_INPUT_DEVICE_LIST',
-  'READ_NETWORK_STATE', 'READ_RUNNING_APPS', 'READ_TV_CHANNEL_LIST', 'WRITE_NOTIFICATION_TOAST',
-  'READ_POWER_STATE', 'READ_COUNTRY_INFO'];
+  'CONTROL_INPUT_TV', 'CONTROL_POWER', 'CONTROL_TV_SCREEN', 'READ_APP_STATUS', 'READ_CURRENT_CHANNEL',
+  'READ_INPUT_DEVICE_LIST', 'READ_NETWORK_STATE', 'READ_RUNNING_APPS', 'READ_TV_CHANNEL_LIST',
+  'WRITE_NOTIFICATION_TOAST', 'READ_POWER_STATE', 'READ_COUNTRY_INFO', 'CONTROL_INPUT_TEXT',
+  'CONTROL_MOUSE_AND_KEYBOARD', 'READ_INSTALLED_APPS', 'READ_SETTINGS', 'READ_STORAGE_DEVICE_LIST'];
 
 var service = new Service('com.gathin.tvhome.service');
 var started = false;

@@ -7,5 +7,6 @@ app/apps.js
 app/icons/
 app/icon.png
 app/largeIcon.png
+service/.ssap-key
 .DS_Store
 node_modules/

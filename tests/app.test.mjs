@@ -18,7 +18,7 @@ const NETWORK = 'luna://com.palm.connectionmanager/getStatus';
 // solid: square logo on a colour (store apps). glyph: transparent icon (LG system apps).
 const APPS = [
   ['netflix', 'Netflix', { solid: '#e50914' }],
-  ['amazon', 'Prime Video', { solid: '#00a8e1' }],
+  ['amazon', 'Prime Video', { solid: '#00a8e1', iconColor: '#00a8e1' }],
   ['youtube.leanback.v4', 'YouTube', { solid: '#ffffff' }],
   ['hotstar', 'JioHotstar', { solid: '#1f80e0' }],
   ['spotify', 'Spotify', { solid: '#1db954' }],
@@ -66,7 +66,7 @@ const server = http.createServer((req, res) => {
     res.end(body);
   };
   if (url === '/apps.js') {
-    const apps = fixture.apps.map(([id, title, look]) => ({ id, title, icon: `icons/${id}.svg`, iconColor: look.glyph || '' }));
+    const apps = fixture.apps.map(([id, title, look]) => ({ id, title, icon: `icons/${id}.svg`, iconColor: look.glyph || look.iconColor || '' }));
     return send(`window.TV_APPS = ${JSON.stringify({ apps, inputs: fixture.inputs })};`, url);
   }
   if (url === '/config.js') {
@@ -103,13 +103,15 @@ after(async () => {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** Opens the launcher in a fresh profile. `responses` maps luna URIs to what the bus answers. */
-async function open({ responses = {}, now } = {}) {
+async function open({ responses = {}, now, noPixels = false } = {}) {
   const context = await browser.createBrowserContext();
   contexts.push(context);
   const page = await context.newPage();
   await page.setViewport({ width: 1920, height: 1080 });
   await page.emulateTimezone('UTC');
-  await page.evaluateOnNewDocument((responses, now) => {
+  await page.evaluateOnNewDocument((responses, now, noPixels) => {
+    // webOS 22: a canvas can't read the app's own icon files.
+    if (noPixels) CanvasRenderingContext2D.prototype.getImageData = () => { throw new DOMException('tainted', 'SecurityError'); };
     window.calls = [];
     window.PalmServiceBridge = function () {
       const bridge = this;
@@ -128,7 +130,7 @@ async function open({ responses = {}, now } = {}) {
       s.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
       document.head.appendChild(s);
     });
-  }, responses, now);
+  }, responses, now, noPixels);
   await page.goto(base);
   await sleep(100);
   return page;
@@ -340,6 +342,17 @@ test('tiles are tinted from the icon: its background, or the app colour for glyp
   assert.ok(tile('Photo & Video').glyph);
   assert.equal(tile('YouTube').tint, '', 'white icon: neutral');
   assert.equal(tile('Apple TV').tint, '', 'black icon: neutral');
+});
+
+test('when the TV blocks reading icon pixels, LG apps are glyphs by id and tints come from the app colour', async () => {
+  reset();
+  const s = await snap(await open({ noPixels: true }));
+  const tile = t => s.tiles.find(x => x.title === t);
+  for (const t of ['Netflix', 'Prime Video', 'Disney+', 'plex']) assert.ok(!tile(t).glyph, `${t}: store icon`);
+  for (const t of ['Music', 'Photo & Video', 'Web Browser']) assert.ok(tile(t).glyph, `${t}: LG glyph`);
+  assert.equal(tile('Prime Video').tint, '0,168,225');
+  assert.equal(tile('Web Browser').tint, '229,75,75');
+  assert.equal(tile('Netflix').tint, '', 'no app colour: neutral');
 });
 
 test('the background glow follows the focused tile colour', async () => {

@@ -246,8 +246,10 @@
       edge = edgeColor(img);
     } catch (e) { /* tainted canvas: fall back to the app's colour */ }
 
-    var glyph = !(edge && edge[3] > 200);
-    var tint = glyph ? parseColor(item.app.iconColor) : [edge[0], edge[1], edge[2]];
+    // Without pixels (webOS 22 won't let a canvas read the app's own files), go by the id: LG's
+    // own apps are the transparent glyphs.
+    var glyph = edge ? edge[3] <= 200 : /^com\.webos\./.test(item.app.id);
+    var tint = glyph || !edge ? parseColor(item.app.iconColor) : [edge[0], edge[1], edge[2]];
     if (tint && rgbToHsv(tint)[1] < 0.15) tint = null;   // white, black or grey: keep the card neutral
     item.card.classList.toggle('glyph', glyph);
     if (tint) item.card.style.setProperty('--tint', tint.join(','));
