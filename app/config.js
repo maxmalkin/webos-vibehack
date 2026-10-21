@@ -1,8 +1,9 @@
-// Launcher configuration. Edit this file, then run webos-launcher/install.sh.
+// Launcher configuration. Edit this file, then run ./install.sh.
 // App ids: run `python3 sync-apps.py --list` (or look in app/apps.js after a sync).
 window.CONFIG = {
-  // Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped.
-  dockApps: ['netflix', 'amazon', 'youtube.leanback.v4', 'hotstar'],
+  // The dock on the home screen, in this order: app ids, or the start of an app's name ('peacock'
+  // finds 'Peacock TV'). Missing apps are skipped. Every other app is in the grid below it.
+  dockApps: ['netflix', 'amazon', 'paramount', 'youtube.leanback.v4', 'peacock'],
 
   // Apps never shown as tiles (inputs and Live TV are already in the Inputs menu).
   hiddenApps: [
@@ -16,6 +17,9 @@ window.CONFIG = {
   // The Live TV app, offered at the end of the Inputs menu. Leave empty to omit.
   liveTvApp: 'com.webos.app.livetv',
 
-  // Tiles per row in the grid; the dock always has this many slots.
-  columns: 4
+  // Tiles per row in the grid below the dock. Tile size follows: 5 = big, 7 = small.
+  columns: 7,
+
+  // Background image in app/ (any 1920x1080 JPG or PNG). Leave empty for a plain gradient.
+  wallpaper: 'wallpaper.jpg'
 };

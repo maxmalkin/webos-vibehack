@@ -8,3 +8,4 @@ app/icons/
 app/icon.png
 app/largeIcon.png
 .DS_Store
+node_modules/

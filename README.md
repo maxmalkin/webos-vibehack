@@ -88,17 +88,31 @@ as a Raspberry Pi.
 
 ## Using it
 
-Same as the [Android launcher](https://github.com/Gathin23/tv-vibehack#the-launcher): a dock of four apps with the focused app's name above it and a glow
-in its colour, the rest of your apps in a grid below, and Inputs (HDMI ports and Live TV), Wi-Fi
-and Settings at the top. The header slides away when the grid scrolls into it.
+The home screen shows a greeting, the clock and your dock of pinned apps over an aurora wallpaper.
+Every other app waits out of sight below: press **Down** for the full grid, seven to a row, and
+**Up** to come back. Round buttons at the top open Inputs (HDMI ports and Live TV), Wi-Fi and
+Settings; the focused one shows its label.
 
 **Rearrange tiles on the TV**: hold **OK** on a tile until it wiggles, move it with the arrows
-(into the top row puts it in the dock), then **OK** to place it or **Back** to cancel. The order is
+(up into the dock swaps it in; the dock keeps its size), then **OK** to place it or **Back** to cancel. The order is
 saved on the TV.
 
-**Configure** in [`app/config.js`](app/config.js): the starting dock, apps to hide, the Live TV
-app and the number of columns. App ids come from `venv/bin/python sync-apps.py $TV_HOST --list`.
+**Configure** in [`app/config.js`](app/config.js): the dock (app ids, or the start of an app's
+name such as `'peacock'`), apps to hide, the Live TV
+app, the number of columns (which sets the tile size) and the wallpaper: put any 1920x1080 image in
+`app/` and name it there. App ids come from `venv/bin/python sync-apps.py $TV_HOST --list`.
 Changing `dockApps` resets an order arranged on the TV.
+
+## Trying it without the TV
+
+```bash
+npm install
+npm run preview     # http://localhost:8000: arrows, Enter, hold Enter to rearrange, Esc
+npm test            # the launcher in headless Chrome, plus the Python scripts against a fake TV
+```
+
+The preview shows your own apps once `sync-apps.py` has run, otherwise a demo set. The tests need
+Google Chrome and check behaviour (order, focus, launching, rearranging, the Inputs menu), not looks.
 
 ## Cleaning up LG's home
 
@@ -131,10 +145,12 @@ For when you do land on it. Names vary a little by webOS version:
 | [`home-watch.py`](home-watch.py) | Sends the Home button to the launcher |
 | [`home-watch-mac.sh`](home-watch-mac.sh) | Runs the watcher as a macOS background service |
 | [`lgtv.py`](lgtv.py) | Pairs with and talks to the TV's remote-control service |
+| [`preview.mjs`](preview.mjs) | Serves the launcher on your computer, with demo apps until you sync |
+| [`tests/`](tests/) | `npm test`: the launcher and the Python scripts |
 | [`assets/icon.jpg`](assets/icon.jpg) | The app icon, resized to PNG by `install.sh` |
 
 ## Credits
 
-The design, layout and app icon come from [tv-vibehack](https://github.com/Gathin23/tv-vibehack)
-by [Gathin](https://github.com/Gathin23). The Outfit font is under the SIL Open Font License
+The original design and the app icon come from [tv-vibehack](https://github.com/Gathin23/tv-vibehack)
+by [Gathin](https://github.com/Gathin23). The Manrope font is under the SIL Open Font License
 ([`app/fonts/OFL.txt`](app/fonts/OFL.txt)). MIT licensed, see [`LICENSE`](LICENSE).
