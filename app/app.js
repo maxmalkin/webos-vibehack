@@ -1,21 +1,25 @@
 /*
- * tvOS style home for webOS: black, a pinned dock row, an app grid, and one glass highlight that
- * springs between tiles. A port of the Android launcher in ../../launcher.
+ * Home screen for webOS: a dock of pinned apps on the home screen, every other app in a grid below
+ * it (out of sight until you press Down), and one focus ring that springs between tiles.
+ * A port of the tv-vibehack Android launcher.
  *
  * webOS does not let third-party apps list installed apps, so sync-apps.py writes them into apps.js.
  */
 (function () {
   'use strict';
 
-  var COLUMNS = Math.max(1, CONFIG.columns || 4);
-  var TILE_W = 360, TILE_H = 202;
-  var CELL_W = (1920 - 2 * 112) / COLUMNS;
-  var ROW_PITCH = 292;
-  var DOCK_TOP = 708;           // tile top of the dock row: next row peeks in at the bottom
-  var DOCK_GAP = 36;            // extra space below the dock
-  var FOCUS_SCALE = 1.1;
-  var GLASS_PAD = 12;           // room for the glass glow around the scaled tile
-  var VIEW_TOP = 80, VIEW_BOTTOM = 1060;    // area grid rows scroll into (the header hides below the dock)
+  var COLUMNS = Math.max(1, CONFIG.columns || 7);
+  var DOCK_SLOTS = 5;                           // the dock's tiles are sized for this many across
+  var MARGIN = 114, GAP = 28;                   // screen edge to the tiles, and between tiles
+  var WIDTH = 1920 - 2 * MARGIN;
+  var TILE_W = Math.round((WIDTH - (COLUMNS - 1) * GAP) / COLUMNS), TILE_H = Math.round(TILE_W * 0.82);
+  var ROW_PITCH = TILE_H + 38;
+  var DOCK_TOP = 560;           // the dock sits low on the home screen
+  var GRID_TOP = 1120;          // the other apps start below the screen; Down pages them into view
+  var GRID_PAGE = GRID_TOP - 170;   // scroll offset that puts the grid's first row near the top
+  var FOCUS_SCALE = 1.06;
+  var GLASS_PAD = 5;            // the focus ring sits just outside the scaled tile
+  var VIEW_TOP = 80, VIEW_BOTTOM = 1050;    // area grid rows scroll into
 
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, OK: 13, BACK: 461, ESC: 27 };
 
@@ -28,15 +32,20 @@
   var ICON_LIVETV = 'M21,6h-7.59l3.29,-3.29L16,2l-4,4l-4,-4l-0.71,0.71L10.59,6H3c-1.1,0 -2,0.89 -2,2v12c0,1.1 0.9,2 2,2h18c1.1,0 2,-0.89 2,-2V8C23,6.89 22.1,6 21,6zM21,20H3V8h18V20zM9,10v8l7,-4L9,10z';
 
   var $ = function (id) { return document.getElementById(id); };
-  var stage = $('stage'), tilesEl = $('tiles'), glass = $('glass'), hero = $('hero');
+  var stage = $('stage'), tilesEl = $('tiles'), glass = $('glass');
   var ambients = [$('ambientA'), $('ambientB')], ambientFront = 0, ambientColor = null;
   var pills = [$('btnInputs'), $('btnWifi'), $('btnSettings')];
   var panel = $('inputsPanel');
 
+  document.documentElement.style.setProperty('--tile-w', TILE_W + 'px');
+  document.documentElement.style.setProperty('--tile-h', TILE_H + 'px');
+  if (CONFIG.wallpaper) document.body.style.setProperty('--wallpaper', 'url("' + CONFIG.wallpaper + '")');
+
   var items = [];               // {app, el, color}
   var zone = 'grid';            // 'grid' | 'top' | 'inputs'
   var focused = 0, pillFocus = 0, inputFocus = 0, inputRows = [];
-  var offset = 0, heroShown = false, glassShown = false;
+  var dockSize = 0, DOCK_W = 0, DOCK_H = 0;   // set by build(): the first dockSize items are the dock
+  var offset = 0, glassShown = false;
   var editing = null;           // {item, snapshot} while a tile is being moved
 
   // ---- luna bus ------------------------------------------------------------------------------
@@ -76,31 +85,42 @@
 
   // ---- apps ----------------------------------------------------------------------------------
 
+  /** The app a dockApps entry names: its id, or else the start of its title ('peacock' finds 'Peacock TV'). */
+  function findApp(apps, entry) {
+    var e = String(entry).toLowerCase();
+    var named = apps.filter(function (a) { return a.title.toLowerCase().indexOf(e) === 0; })
+      .sort(function (a, b) { return a.title.length - b.title.length; });   // 'youtube' finds YouTube, not YouTube Kids
+    return apps.filter(function (a) { return a.id === entry; })[0] || named[0];
+  }
+
+  /** {apps, dock}: every app to show in order, and how many of the first ones form the dock. */
   function orderedApps() {
     var all = (window.TV_APPS && TV_APPS.apps) || [];
-    var byId = {};
+    var byId = {}, hidden = {};
     all.forEach(function (a) { byId[a.id] = a; });
-    var hidden = {};
     (CONFIG.hiddenApps || []).forEach(function (id) { hidden[id] = true; });
+    var visible = all.filter(function (a) { return !hidden[a.id]; });
     var byTitle = function (a, b) { return a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1; };
+    var others = function (placed) {
+      return visible.filter(function (a) { return placed.indexOf(a) < 0; }).sort(byTitle);
+    };
+
+    var dock = [];
+    (CONFIG.dockApps || []).forEach(function (entry) {
+      var a = findApp(visible, entry);
+      if (a && dock.indexOf(a) < 0) dock.push(a);
+    });
+    // The dock holds as many apps as dockApps found; with none installed, the first few.
+    var size = dock.length || Math.min(DOCK_SLOTS, visible.length);
 
     // An order arranged on the TV wins, until dockApps in config.js changes.
     var saved = loadOrder();
     if (saved) {
-      var placed = [];
-      saved.forEach(function (id) {
-        if (byId[id] && !hidden[id]) { placed.push(byId[id]); hidden[id] = true; }
-      });
-      return placed.concat(all.filter(function (a) { return !hidden[a.id]; }).sort(byTitle));
+      var placed = saved.map(function (id) { return byId[id]; })
+        .filter(function (a) { return a && !hidden[a.id]; });
+      return { apps: placed.concat(others(placed)), dock: size };
     }
-
-    var dock = [];
-    (CONFIG.dockApps || []).forEach(function (id) {
-      if (byId[id] && !hidden[id] && dock.length < COLUMNS) { dock.push(byId[id]); hidden[id] = true; }
-    });
-    var rest = all.filter(function (a) { return !hidden[a.id]; });
-    rest.sort(byTitle);
-    return dock.concat(rest);
+    return { apps: dock.concat(others(dock)), dock: size };
   }
 
   var ORDER_KEY = 'tvhome.order';
@@ -123,27 +143,63 @@
     } catch (e) { /* storage unavailable: the order lasts until the app restarts */ }
   }
 
-  function rowOf(i) { return Math.floor(i / COLUMNS); }
-  function tileLeft(i) { return 112 + (i % COLUMNS) * CELL_W + (CELL_W - TILE_W) / 2; }
-  function tileTop(i) { var r = rowOf(i); return DOCK_TOP + r * ROW_PITCH + (r > 0 ? DOCK_GAP : 0); }
+  // Row 0 is the dock; rows 1 and on are the grid, COLUMNS to a row.
+  function rowOf(i) { return i < dockSize ? 0 : 1 + Math.floor((i - dockSize) / COLUMNS); }
+  function rowStart(r) { return r ? dockSize + (r - 1) * COLUMNS : 0; }
+  function rowEnd(r) { return Math.min(items.length, r ? rowStart(r) + COLUMNS : dockSize) - 1; }
+  function lastRow() { return rowOf(items.length - 1); }
+
+  /** Where tile i sits on the stage: {x, y, w, h}. */
+  function box(i) {
+    if (i < dockSize) return { x: MARGIN + i * (DOCK_W + GAP), y: DOCK_TOP, w: DOCK_W, h: DOCK_H };
+    var j = i - dockSize;
+    return { x: MARGIN + (j % COLUMNS) * (TILE_W + GAP), y: GRID_TOP + Math.floor(j / COLUMNS) * ROW_PITCH, w: TILE_W, h: TILE_H };
+  }
+
+  function centerX(i) { var b = box(i); return b.x + b.w / 2; }
+
+  /** The tile in row r closest to x: Up and Down go straight up and down the screen. */
+  function nearestIn(r, x) {
+    var best = -1, bestD = Infinity;
+    for (var i = rowStart(r); i <= rowEnd(r); i++) {
+      var d = Math.abs(centerX(i) - x);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  /** 'Spotify - Music and Podcasts' -> 'Spotify', 'Tubi: Free Movies & TV' -> 'Tubi'. */
+  function shortName(title) { return title.split(/\s+[-\u2013\u2014|]\s+|:\s+/)[0]; }
 
   function build() {
     tilesEl.innerHTML = '';
-    items = orderedApps().map(function (app) {
+    var ordered = orderedApps();
+    dockSize = ordered.dock;
+    var across = Math.max(DOCK_SLOTS, dockSize);
+    DOCK_W = Math.round((WIDTH - (across - 1) * GAP) / across);
+    DOCK_H = Math.round(DOCK_W * 0.82);
+    document.documentElement.style.setProperty('--dock-w', DOCK_W + 'px');
+    document.documentElement.style.setProperty('--dock-h', DOCK_H + 'px');
+    $('gridLabel').style.top = (GRID_TOP - 84) + 'px';
+    items = ordered.apps.map(function (app) {
       var el = document.createElement('div');
       el.className = 'item';
       var card = document.createElement('div');
       card.className = 'card';
-      var img = document.createElement('img');
+      // Shown as a background: webOS 22 ignores border-radius on <img>. The Image samples colours.
+      var icon = document.createElement('div');
+      icon.className = 'icon';
+      icon.style.backgroundImage = 'url("' + app.icon + '")';
+      card.appendChild(icon);
+      var img = new Image();
       var item = { app: app, el: el, card: card, color: null };
       img.onload = function () { paintTile(item, img); };
       img.src = app.icon;
-      card.appendChild(img);
       el.appendChild(card);
       var name = document.createElement('div');
       name.className = 'name';
-      name.textContent = app.title;
-      el.appendChild(name);
+      name.textContent = shortName(app.title);
+      card.appendChild(name);
       el.addEventListener('mouseover', function () {
         if (zone !== 'inputs' && !editing) focusTile(items.indexOf(item));
       });
@@ -160,18 +216,12 @@
   /** Places every tile by its position in items; tiles glide when the order changes. */
   function layout() {
     items.forEach(function (it, i) {
-      it.el.style.left = tileLeft(i) + 'px';
-      it.el.style.top = tileTop(i) + 'px';
-      it.el.classList.toggle('dock', rowOf(i) === 0);   // the dock has no labels: the top shelf names it
+      var b = box(i);
+      it.el.style.left = b.x + 'px';
+      it.el.style.top = b.y + 'px';
+      it.el.classList.toggle('dock', i < dockSize);
     });
-
-    var band = $('dockBand');
-    var n = Math.min(COLUMNS, items.length);
-    band.style.display = n ? 'block' : 'none';
-    band.style.left = (tileLeft(0) - 28) + 'px';
-    band.style.top = (DOCK_TOP - 28) + 'px';
-    band.style.width = ((n - 1) * CELL_W + TILE_W + 56) + 'px';
-    band.style.height = (TILE_H + 56) + 'px';
+    $('gridLabel').style.display = items.length > dockSize ? '' : 'none';
   }
 
   function animateIn() {
@@ -182,8 +232,8 @@
   }
 
   /**
-   * Store icons are square logos on a solid colour: fill the wide tile with that colour so the logo
-   * reads as a banner. LG's system icons are glyphs on transparent: use the app's own colour.
+   * Tints the card with the app's colour: the background of a store icon (a logo on a solid
+   * colour), or the app's own colour for LG's system icons, which are glyphs on transparent.
    */
   function paintTile(item, img) {
     var px = null, edge = null;
@@ -196,16 +246,15 @@
       edge = edgeColor(img);
     } catch (e) { /* tainted canvas: fall back to the app's colour */ }
 
-    var glyphColor = null;
-    if (edge && edge[3] > 200) {
-      item.card.style.background = 'rgb(' + edge[0] + ',' + edge[1] + ',' + edge[2] + ')';
-    } else {
-      item.card.classList.add('glyph');
-      item.card.style.background = glyphBackground(item.app.iconColor);
-      glyphColor = glyphBackground(item.app.iconColor) === '#2c2c2e' ? null : parseColor(item.app.iconColor);
-    }
-    // A white glyph says nothing about the app: glow in the tile's colour instead.
-    item.color = glyphColor || (px ? vividColor(px) : parseColor(item.app.iconColor));
+    // Without pixels (webOS 22 won't let a canvas read the app's own files), go by the id: LG's
+    // own apps are the transparent glyphs.
+    var glyph = edge ? edge[3] <= 200 : /^com\.webos\./.test(item.app.id);
+    var tint = glyph || !edge ? parseColor(item.app.iconColor) : [edge[0], edge[1], edge[2]];
+    if (tint && rgbToHsv(tint)[1] < 0.15) tint = null;   // white, black or grey: keep the card neutral
+    item.card.classList.toggle('glyph', glyph);
+    if (tint) item.card.style.setProperty('--tint', tint.join(','));
+    // A white glyph says nothing about the app: glow in the icon's colours instead.
+    item.color = (glyph && tint) || (px ? vividColor(px) : parseColor(item.app.iconColor));
     if (items[focused] === item) setAmbient(item.color);
   }
 
@@ -221,14 +270,6 @@
     g.drawImage(img, 0, 0);
     var corner = g.getImageData(2, 2, 1, 1).data;
     return corner[3] > 200 ? corner : g.getImageData(2, Math.floor(h / 2), 1, 1).data;
-  }
-
-  function glyphBackground(hex) {
-    var c = parseColor(hex);
-    if (!c) return '#2c2c2e';
-    var hsv = rgbToHsv(c);
-    if (hsv[1] < 0.15 && (hsv[2] > 0.85 || hsv[2] < 0.1)) return '#2c2c2e';   // white or black glyph colour
-    return 'rgb(' + c.join(',') + ')';
   }
 
   /** A vivid colour from the icon: the most saturated, not too dark pixel, or the lifted average. */
@@ -296,22 +337,23 @@
     focused = i;
     items[i].el.classList.add('focused');
 
-    var top = tileTop(i), row = rowOf(i);
+    var b = box(i), row = rowOf(i);
     if (row === 0) {
-      offset = 0;
+      offset = 0;                   // home: the dock, with the grid out of sight below
+    } else if (row === 1) {
+      offset = GRID_PAGE;           // into the grid: page it up so it has the screen
     } else {
-      // Scroll just enough so the whole glass and the name below the tile are visible.
-      if (top - offset + TILE_H + 70 > VIEW_BOTTOM) offset = top + TILE_H + 70 - VIEW_BOTTOM;
-      if (top - offset - 24 < VIEW_TOP) offset = top - 24 - VIEW_TOP;
+      // Scroll just enough so the whole focus ring and its glow are visible.
+      if (b.y - offset + b.h + 24 > VIEW_BOTTOM) offset = b.y + b.h + 24 - VIEW_BOTTOM;
+      if (b.y - offset - 24 < VIEW_TOP) offset = b.y - 24 - VIEW_TOP;
+      offset = Math.max(offset, GRID_PAGE);
     }
     stage.style.transform = 'translateY(' + (-offset) + 'px)';
-    // Keep the header until the content (the dock band is topmost) would run into it.
-    var header = document.querySelector('header');
-    var headerBottom = header.offsetTop + header.offsetHeight;   // layout box: ignores the hide slide
-    document.body.classList.toggle('scrolled', DOCK_TOP - 28 - offset < headerBottom + 24);
+    document.body.classList.toggle('scrolled', offset > 0);   // the header slides away over the grid
 
-    var w = TILE_W * FOCUS_SCALE + 2 * GLASS_PAD, h = TILE_H * FOCUS_SCALE + 2 * GLASS_PAD;
-    var x = tileLeft(i) + TILE_W / 2 - w / 2, y = top + TILE_H / 2 - h / 2;
+    var w = b.w * FOCUS_SCALE + 2 * GLASS_PAD, h = b.h * FOCUS_SCALE + 2 * GLASS_PAD;
+    var x = b.x + b.w / 2 - w / 2, y = b.y + b.h / 2 - h / 2;
+    glass.style.setProperty('--tile-h', b.h + 'px');
     glass.style.width = w + 'px';
     glass.style.height = h + 'px';
     glass.style.transform = 'translate(' + x + 'px,' + y + 'px)';
@@ -324,45 +366,12 @@
       glassShown = true;
     }
 
-    if (row === 0) showHero(items[i]);
-    else hideHero();
-    setAmbient(items[i].color);   // the glow follows the focused tile in every row
+    setAmbient(items[i].color);   // the glow follows the focused tile
   }
 
   function hideGlass() {
     glassShown = false;
     glass.style.opacity = '0';
-  }
-
-  function showHero(item) {
-    var label = item.app.title;
-    hero.style.top = (DOCK_TOP - 28 - 52 - 96) + 'px';
-    if (!heroShown) {
-      hero.textContent = label;
-      hero.style.transform = 'none';
-      hero.style.opacity = '1';
-      heroShown = true;
-    } else if (hero.textContent !== label) {
-      hero.style.opacity = '0';
-      hero.style.transform = 'translateX(-24px)';
-      clearTimeout(hero.swap);
-      hero.swap = setTimeout(function () {
-        hero.textContent = label;
-        hero.style.transition = 'none';
-        hero.style.transform = 'translateX(24px)';
-        hero.offsetWidth;
-        hero.style.transition = '';
-        hero.style.transform = 'none';
-        hero.style.opacity = '1';
-      }, 120);
-    }
-    setAmbient(item.color);
-  }
-
-  function hideHero() {
-    if (!heroShown) return;
-    heroShown = false;
-    hero.style.opacity = '0';
   }
 
   /** Crossfades the glow to a new colour by swapping between two layers. */
@@ -372,8 +381,8 @@
     if (key === ambientColor) return;
     ambientColor = key;
     var back = ambients[1 - ambientFront];
-    back.style.background = 'radial-gradient(circle 1190px at 32% 42%, rgba(' + key + ',0.36) 0%, rgba(' +
-      key + ',0.15) 50%, rgba(' + key + ',0) 100%)';
+    back.style.background = 'radial-gradient(circle 1100px at 30% 50%, rgba(' + key + ',0.2) 0%, rgba(' +
+      key + ',0.07) 50%, rgba(' + key + ',0) 100%)';
     back.style.opacity = '1';
     ambients[ambientFront].style.opacity = '0';
     ambientFront = 1 - ambientFront;
@@ -399,7 +408,7 @@
 
   /** The pill straight above a dock tile, by horizontal distance. */
   function pillAbove(i) {
-    var cx = tileLeft(i) + TILE_W / 2, best = 0, bestD = Infinity;
+    var cx = centerX(i), best = 0, bestD = Infinity;
     pills.forEach(function (p, k) {
       var r = p.getBoundingClientRect();
       var d = Math.abs(r.left + r.width / 2 - cx);
@@ -411,14 +420,13 @@
   // ---- top bar -------------------------------------------------------------------------------
 
   function updateClock() {
-    var now = new Date(), h = now.getHours();
+    var now = new Date(), h = now.getHours(), m = now.getMinutes();
     for (var k = 0; k < GREETINGS.length; k++) {
       if (h < GREETINGS[k][0]) { $('greeting').textContent = GREETINGS[k][1]; break; }
     }
-    var m = now.getMinutes();
     $('clock').textContent = ((h % 12) || 12) + ':' + (m < 10 ? '0' : '') + m;
     $('ampm').textContent = h < 12 ? 'am' : 'pm';
-    $('date').textContent = DAYS[now.getDay()] + '  ' + now.getDate() + ' ' + MONTHS[now.getMonth()];
+    $('date').textContent = DAYS[now.getDay()] + ', ' + now.getDate() + ' ' + MONTHS[now.getMonth()];
   }
 
   /** Shows the Wi-Fi network name when the TV reports it, otherwise the connection type. */
@@ -452,11 +460,11 @@
     }
     if (!inputRows.length) { toast('No inputs found'); return; }
 
-    // Hang right below the Inputs pill, at least as wide as it.
+    // Hang below the Inputs button, lined up with its right edge: the edge that stays put while
+    // the focused button widens and narrows.
     var r = pills[0].getBoundingClientRect();
-    panel.style.left = r.left + 'px';
-    panel.style.top = (r.bottom + 20) + 'px';
-    panel.style.minWidth = Math.max(r.width, 300) + 'px';
+    panel.style.right = (1920 - r.right) + 'px';
+    panel.style.top = (r.bottom + 16) + 'px';
     panel.classList.remove('hidden');
     pills[pillFocus].classList.remove('focused');
     zone = 'inputs';
@@ -543,11 +551,12 @@
     var k = e.keyCode;
     if (k === KEY.OK && okDown) { e.preventDefault(); return; }   // key repeat while held
     if (k === KEY.OK) okDown = true;
+    var row = rowOf(focused);
     if (editing) {
       if (k === KEY.LEFT) moveTo(focused - 1);
       else if (k === KEY.RIGHT) moveTo(focused + 1);
-      else if (k === KEY.UP) moveTo(focused - COLUMNS);
-      else if (k === KEY.DOWN) moveTo(Math.min(focused + COLUMNS, items.length - 1));
+      else if (k === KEY.UP) { if (row > 0) moveTo(nearestIn(row - 1, centerX(focused))); }
+      else if (k === KEY.DOWN) moveTo(row < lastRow() ? nearestIn(row + 1, centerX(focused)) : items.length - 1);
       else if (k === KEY.OK) finishEdit(true);
       else if (k === KEY.BACK || k === KEY.ESC) finishEdit(false);
       else return;
@@ -565,14 +574,13 @@
       else if (k === KEY.BACK) { /* home screen: Back goes nowhere */ }
       else return;
     } else {
-      var col = focused % COLUMNS, last = items.length - 1;
-      if (k === KEY.LEFT) { if (col > 0) focusTile(focused - 1); }
-      else if (k === KEY.RIGHT) { if (col < COLUMNS - 1 && focused < last) focusTile(focused + 1); }
+      if (k === KEY.LEFT) { if (focused > rowStart(row)) focusTile(focused - 1); }
+      else if (k === KEY.RIGHT) { if (focused < rowEnd(row)) focusTile(focused + 1); }
       else if (k === KEY.UP) {
-        if (rowOf(focused) === 0) focusPill(pillAbove(focused));
-        else focusTile(focused - COLUMNS);
+        if (row === 0 || !items.length) focusPill(pillAbove(focused));
+        else focusTile(nearestIn(row - 1, centerX(focused)));
       } else if (k === KEY.DOWN) {
-        if (rowOf(focused) < rowOf(last)) focusTile(Math.min(focused + COLUMNS, last));
+        if (row < lastRow()) focusTile(nearestIn(row + 1, centerX(focused)));
       } else if (k === KEY.OK) {
         okTimer = setTimeout(function () { okTimer = null; startEdit(); }, LONG_PRESS_MS);
       } else if (k === KEY.BACK) { /* home screen: Back goes nowhere */ }
@@ -606,6 +614,9 @@
   updateClock();
   setInterval(updateClock, 10000);
   watchNetwork();
+  // Wakes the Home watcher (service/), which then keeps itself running and reopens this launcher
+  // whenever LG's home comes up.
+  luna('luna://com.gathin.tvhome.service/start', {});
   animateIn();
   zone = 'none';
   focusTile(0);

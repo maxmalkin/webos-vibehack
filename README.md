@@ -5,7 +5,8 @@ An Apple TV-style home screen for LG TVs. It's a webOS port of the launcher from
 
 ![The launcher running on an LG OLED C6](docs/screenshot.jpg)
 
-Tested on an LG OLED C6 (OLED55C6XLA, webOS 26, firmware 43.21.79).
+Tested on an LG OLED C6 (OLED55C6XLA, webOS 26, firmware 43.21.79) and an LG UQ7070 (50UQ7070ZUE,
+webOS 22, firmware 04.60.90).
 
 ## What's different from Android
 
@@ -15,7 +16,7 @@ webOS is more locked down than Android TV, so three things work differently:
 |---|---|---|
 | Install | ADB, no account | LG's **Developer Mode** app (free LG developer account) |
 | App list | read on the TV | read from your computer by `sync-apps.py` and bundled in; webOS won't let an app list installed apps |
-| Home button | the launcher *is* Home | webOS always opens LG's home; `home-watch.py`, running on another device, switches straight back (about 0.1 s) |
+| Home button | the launcher *is* Home | webOS always opens LG's home; a watcher inside the launcher switches straight back |
 
 There's no debloat step: webOS has no ADB-style package disabling. Turn off LG's ads in the TV's
 own settings instead (see [Cleaning up LG's home](#cleaning-up-lgs-home)).
@@ -64,16 +65,22 @@ holding 1 opens the launcher from anywhere.
 
 ## The Home button
 
-webOS hard-wires Home to LG's home, and blocks Developer Mode apps from seeing which app is in front,
-so the TV can't redirect it on its own. [`home-watch.py`](home-watch.py) does it from another
-always-on device on the same network: it watches the TV's foreground app and, the moment LG's home
-appears, opens the launcher on top.
+webOS hard-wires Home to LG's home and hides which app is in front from Developer Mode apps. The
+TV's remote-control service (the one LG's phone app uses) does share it, and it answers on the TV
+itself. So the launcher brings a small watcher, [`service/`](service/), that runs on the TV,
+connects there, and opens the launcher the moment LG's home appears. No second device needed.
 
-- **Press Home twice** within three seconds to stay on LG's home, for its menus.
-- When the TV powers on to LG's home, it goes to the launcher too.
-- When the watcher isn't running, Home simply opens LG's home as usual.
+- The first time the launcher opens, the TV asks to allow a device: accept. It asks again after
+  each reinstall.
+- LG's home shows for a few seconds first: as long as the TV takes to open the launcher.
+- **Press Home again** within three seconds of the launcher coming back to stay on LG's home, for
+  its menus.
+- If Home stops coming back (after the TV restarts, say), open the launcher once with its number
+  key and the watcher starts again.
 
-On a Mac, install it as a background service that starts at login:
+Tested on the UQ7070 (webOS 22). If it doesn't work on your TV, [`home-watch.py`](home-watch.py)
+does the same job from another always-on device on the network. On a Mac, install it as a
+background service that starts at login:
 
 ```bash
 TV_HOST=192.168.1.50 ./home-watch-mac.sh       # install or update
@@ -88,17 +95,31 @@ as a Raspberry Pi.
 
 ## Using it
 
-Same as the [Android launcher](https://github.com/Gathin23/tv-vibehack#the-launcher): a dock of four apps with the focused app's name above it and a glow
-in its colour, the rest of your apps in a grid below, and Inputs (HDMI ports and Live TV), Wi-Fi
-and Settings at the top. The header slides away when the grid scrolls into it.
+The home screen shows a greeting, the clock and your dock of pinned apps over an aurora wallpaper.
+Every other app waits out of sight below: press **Down** for the full grid, seven to a row, and
+**Up** to come back. Round buttons at the top open Inputs (HDMI ports and Live TV), Wi-Fi and
+Settings; the focused one shows its label.
 
 **Rearrange tiles on the TV**: hold **OK** on a tile until it wiggles, move it with the arrows
-(into the top row puts it in the dock), then **OK** to place it or **Back** to cancel. The order is
+(up into the dock swaps it in; the dock keeps its size), then **OK** to place it or **Back** to cancel. The order is
 saved on the TV.
 
-**Configure** in [`app/config.js`](app/config.js): the starting dock, apps to hide, the Live TV
-app and the number of columns. App ids come from `venv/bin/python sync-apps.py $TV_HOST --list`.
+**Configure** in [`app/config.js`](app/config.js): the dock (app ids, or the start of an app's
+name such as `'peacock'`), apps to hide, the Live TV
+app, the number of columns (which sets the tile size) and the wallpaper: put any 1920x1080 image in
+`app/` and name it there. App ids come from `venv/bin/python sync-apps.py $TV_HOST --list`.
 Changing `dockApps` resets an order arranged on the TV.
+
+## Trying it without the TV
+
+```bash
+npm install
+npm run preview     # http://localhost:8000: arrows, Enter, hold Enter to rearrange, Esc
+npm test            # the launcher in headless Chrome, plus the Python scripts against a fake TV
+```
+
+The preview shows your own apps once `sync-apps.py` has run, otherwise a demo set. The tests need
+Google Chrome and check behaviour (order, focus, launching, rearranging, the Inputs menu), not looks.
 
 ## Cleaning up LG's home
 
@@ -128,13 +149,16 @@ For when you do land on it. Names vary a little by webOS version:
 | [`app/`](app/) | The launcher: `index.html`, `style.css`, `app.js`, `config.js`, `appinfo.json` |
 | [`install.sh`](install.sh) | Syncs your apps, packages and installs the launcher, and opens it |
 | [`sync-apps.py`](sync-apps.py) | Reads apps, icons and HDMI inputs from the TV into `app/apps.js` and `app/icons/` |
-| [`home-watch.py`](home-watch.py) | Sends the Home button to the launcher |
+| [`service/`](service/) | The Home watcher that runs on the TV with the launcher |
+| [`home-watch.py`](home-watch.py) | The same, from another device, for TVs where the watcher doesn't work |
 | [`home-watch-mac.sh`](home-watch-mac.sh) | Runs the watcher as a macOS background service |
 | [`lgtv.py`](lgtv.py) | Pairs with and talks to the TV's remote-control service |
+| [`preview.mjs`](preview.mjs) | Serves the launcher on your computer, with demo apps until you sync |
+| [`tests/`](tests/) | `npm test`: the launcher and the Python scripts |
 | [`assets/icon.jpg`](assets/icon.jpg) | The app icon, resized to PNG by `install.sh` |
 
 ## Credits
 
-The design, layout and app icon come from [tv-vibehack](https://github.com/Gathin23/tv-vibehack)
-by [Gathin](https://github.com/Gathin23). The Outfit font is under the SIL Open Font License
+The original design and the app icon come from [tv-vibehack](https://github.com/Gathin23/tv-vibehack)
+by [Gathin](https://github.com/Gathin23). The Manrope font is under the SIL Open Font License
 ([`app/fonts/OFL.txt`](app/fonts/OFL.txt)). MIT licensed, see [`LICENSE`](LICENSE).
